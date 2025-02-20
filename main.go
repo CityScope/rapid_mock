@@ -71,6 +71,18 @@ const fullPageHTML = `
 					document.exitFullscreen();
 				}
 			}
+			if (e.key === "ArrowLeft") {
+				fetch("/previous", {method: "POST"})
+			}
+			if (e.key === "ArrowRight") {
+				fetch("/advance", {method: "POST"})
+			}
+			if (e.key === "r" || e.key === "R") {
+				fetch("/reload", {method: "POST"})
+			}
+			if (e.key === "0") {
+				fetch("/reset", {method: "POST"})
+			}
 		});
 	</script>
 </body>
@@ -80,7 +92,7 @@ const fullPageHTML = `
 // Partial template to render the media element.
 const contentTemplateHTML = `
 {{if .IsVideo}}
-	<video autoplay muted loop style="width:100%; height:100%; object-fit:contain;" src="{{.MediaSrc}}"></video>
+	<video autoplay loop style="width:100%; height:100%; object-fit:contain;" src="{{.MediaSrc}}"></video>
 {{else}}
 	<img style="width:100%; height:100%; object-fit:contain;" src="{{.MediaSrc}}" alt="media">
 {{end}}
@@ -106,7 +118,10 @@ func main() {
 	http.HandleFunc("/b", serveB)
 	http.HandleFunc("/content/a", contentA)
 	http.HandleFunc("/content/b", contentB)
-	http.HandleFunc("/advance", advanceHandler)
+	http.HandleFunc("/reset", resetHandler)
+	http.HandleFunc("/reload", reloadHandler)
+	http.HandleFunc("/advance", resetHandler)
+	http.HandleFunc("/previous", previousHandler)
 	http.HandleFunc("/sse", sseHandler)
 
 	// Serve static media files.
@@ -197,11 +212,66 @@ func contentB(w http.ResponseWriter, r *http.Request) {
 func isVideo(fileName string) bool {
 	ext := filepath.Ext(fileName)
 	switch ext {
-	case ".mp4", ".webm", ".ogg":
+	case ".mp4", ".webm", ".ogg", ".mov":
 		return true
 	default:
 		return false
 	}
+}
+
+// resetHandler increments the global index and broadcasts an SSE event.
+func resetHandler(w http.ResponseWriter, r *http.Request) {
+	log.Printf("advanced")
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	mu.Lock()
+	currentIndex = 0
+	mu.Unlock()
+
+	// Broadcast the "mediaChanged" event to all connected clients.
+	broadcastSSE("mediaChanged")
+
+	w.WriteHeader(http.StatusOK)
+}
+
+// resetHandler increments the global index and broadcasts an SSE event.
+func reloadHandler(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	mu.Lock()
+	filesA, err = loadFiles("./data/a")
+	if err != nil {
+		log.Fatal("Error loading ./data/a: ", err)
+	}
+	mu.Unlock()
+
+	mu.Lock()
+	filesB, err = loadFiles("./data/b")
+	if err != nil {
+		log.Fatal("Error loading ./data/b: ", err)
+	}
+	mu.Unlock()
+
+	if len(filesA) == 0 || len(filesB) == 0 {
+		log.Fatal("No files found in one of the directories.")
+	}
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	mu.Lock()
+	currentIndex = 0
+	mu.Unlock()
+
+	// Broadcast the "mediaChanged" event to all connected clients.
+	broadcastSSE("mediaChanged")
+
+	w.WriteHeader(http.StatusOK)
 }
 
 // advanceHandler increments the global index and broadcasts an SSE event.
@@ -213,6 +283,27 @@ func advanceHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	mu.Lock()
 	currentIndex++
+	mu.Unlock()
+
+	// Broadcast the "mediaChanged" event to all connected clients.
+	broadcastSSE("mediaChanged")
+
+	w.WriteHeader(http.StatusOK)
+}
+
+// previousHandler decrements the global index and broadcasts an SSE event.
+func previousHandler(w http.ResponseWriter, r *http.Request) {
+	log.Printf("advanced")
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	mu.Lock()
+	currentIndex--
+	if currentIndex < 0 {
+		currentIndex = 0
+	}
 	mu.Unlock()
 
 	// Broadcast the "mediaChanged" event to all connected clients.
@@ -278,7 +369,7 @@ func isMedia(fileName string) bool {
 	switch filepath.Ext(fileName) {
 	case ".jpg", ".png", ".jpeg":
 		return true
-	case ".mp4", ".webm", ".ogg":
+	case ".mp4", ".webm", ".ogg", ".mov":
 		return true
 	default:
 		return false
