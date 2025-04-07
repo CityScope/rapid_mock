@@ -120,7 +120,7 @@ func main() {
 	http.HandleFunc("/content/b", contentB)
 	http.HandleFunc("/reset", resetHandler)
 	http.HandleFunc("/reload", reloadHandler)
-	http.HandleFunc("/advance", resetHandler)
+	http.HandleFunc("/advance", advanceHandler)
 	http.HandleFunc("/previous", previousHandler)
 	http.HandleFunc("/sse", sseHandler)
 
@@ -212,7 +212,7 @@ func contentB(w http.ResponseWriter, r *http.Request) {
 func isVideo(fileName string) bool {
 	ext := filepath.Ext(fileName)
 	switch ext {
-	case ".mp4", ".webm", ".ogg", ".mov":
+	case ".mp4", ".webm", ".ogg", ".mov", ".m4v":
 		return true
 	default:
 		return false
@@ -369,7 +369,7 @@ func isMedia(fileName string) bool {
 	switch filepath.Ext(fileName) {
 	case ".jpg", ".png", ".jpeg":
 		return true
-	case ".mp4", ".webm", ".ogg", ".mov":
+	case ".mp4", ".webm", ".ogg", ".mov", ".m4v":
 		return true
 	default:
 		return false
